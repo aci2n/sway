@@ -531,6 +531,11 @@ void view_assign_ctx(struct sway_view *view, struct launcher_ctx *ctx) {
 	view->ctx = ctx;
 }
 
+static bool _container_by_pid(struct sway_container *con, void *data) {
+	pid_t *pid = data;
+	return con->view->pid == *pid;
+}
+
 static struct sway_workspace *select_workspace(struct sway_view *view) {
 	struct sway_seat *seat = input_manager_current_seat();
 
@@ -576,6 +581,14 @@ static struct sway_workspace *select_workspace(struct sway_view *view) {
 		view_assign_ctx(view, NULL);
 		return ws;
 	}
+
+	// Some processes might create more than one toplevel shell, try to preserve workspace
+	struct sway_container *prev_con = root_find_container(_container_by_pid, &view->pid);
+	if (prev_con) {
+		ws = prev_con->pending.workspace;
+		sway_log(SWAY_DEBUG, "Restoring workspace %s for pid %d", ws->name, view->pid);
+		return ws;
+	} 
 
 	// Use the focused workspace
 	struct sway_node *node = seat_get_focus_inactive(seat, &root->node);
